@@ -41,7 +41,7 @@ from plotnine import *
 #Q = 8; num_tasks = 1; input_dims = 1; num_hidden_dgp_dims = 3; num_inducing = 256
 from Utils import MaskedMultitaskGaussianLikelihood, DGPHiddenLayer_CHOL, DGPHiddenLayer_DECOUPLED, DGPHiddenLayer_MEANFLD, DSPPHiddenLayer_MEANFLD, DSPPHiddenLayer_CHOL, DSPPHiddenLayer_DECOUPLED, MultitaskDSPP, MultitaskDeepGP, SVGPModel, ODSVGPModel, create_directory, data_load, img_to_patch, mask_patches, date_phase
 
-path0 = os.getcwd() #"/rds/projects/o/oyebamok-deepmind-work/DGP_folder/batch_result7"
+path0 = os.getcwd() #
 os.chdir(path0)
 torch.manual_seed(2001210)
 device = 'cpu'
