@@ -24,6 +24,7 @@ from gpytorch.means import ConstantMean, LinearMean
 from gpytorch.models.deep_gps import DeepGPLayer, DeepGP
 from gpytorch.models.deep_gps.dspp import DSPPLayer, DSPP
 from uci_datasets import Dataset
+import gc
 scale_to_bounds = gpytorch.utils.grid.ScaleToBounds(0.,1.)
 nlpd = gpytorch.metrics.negative_log_predictive_density
 msll = gpytorch.metrics.mean_standardized_log_loss
@@ -52,12 +53,12 @@ def data_load(uu,batch_size,split):
         test_y = np.delete(Y,index, axis=0).contiguous()
         inducing_points = (train_x[torch.randperm(min(1000 * 100, train_y.size(0)))[0:num_inducing], :])
         inducing_points = inducing_points.clone().data.cpu().numpy()
-        inducing_points = torch.tensor(kmeans2(train_x.data.cpu().numpy(),inducing_points, minit='matrix')[0]).to(torch.float)
+        inducing_points = torch.tensor(kmeans2(train_x.data.cpu().numpy(),inducing_points, minit='matrix')[0]).to(device).to(torch.float)
         test_loader = DataLoader(TensorDataset(test_x, test_y), batch_size=batch_size, shuffle=False)
         train_loader = DataLoader(TensorDataset(train_x, train_y), batch_size=batch_size, shuffle=True)
         mask = None
     elif uu=='IAP':
-        dir0 = os.path.join(path0,"Datanew.xlsx")
+        dir0 = os.path.join(path0,"Datanew2.xlsx")
         out0 = pd.read_excel(dir0,skiprows=0,sheet_name=None)# 4 scenario for 2050s#[9,10,11])
         id = [2, 3, 4, 5, 6, 7,9,10, 11, 12, 13, 14, 15, 16,17]
         train_y = torch.tensor(out0['train_y'].values)
@@ -69,6 +70,8 @@ def data_load(uu,batch_size,split):
         inducing_points = (train_x[torch.randperm(min(1000 * 100, train_y.size(0)))[0:num_inducing], :])
         inducing_points = inducing_points.clone().data.cpu().numpy()
         inducing_points = torch.tensor(kmeans2(train_x.data.cpu().numpy(),inducing_points, minit='matrix')[0]).to(torch.float)
+        #inducing_indices = torch.randperm(train_x.size(0))[:num_inducing]
+        #inducing_points = train_x[inducing_indices].to(device).to(torch.float32)
         train_loader = DataLoader(TensorDataset(train_x, train_y), batch_size=batch_size, shuffle=True)
         test_loader = DataLoader(TensorDataset(test_x, test_y), batch_size=batch_size, shuffle=False)
         mask = None
@@ -80,13 +83,13 @@ def data_load(uu,batch_size,split):
         data0 = np.asarray(data[:,[1,2,3,4,5]]).astype(np.float32)    
         #
         t0 = [date_phase(date) for date in data[:,0]]
-        t1 = month_sin = np.sin(2 * np.pi * pd.to_datetime(data[:,0]).month / 12)
-        t2 = month_cos = np.cos(2 * np.pi * pd.to_datetime(data[:,0]).month / 12)
+        t1 = np.sin(2 * np.pi * pd.to_datetime(data[:,0]).month / 12)
+        t2 = np.cos(2 * np.pi * pd.to_datetime(data[:,0]).month / 12)
         inp = np.column_stack((t0,t1,t2,data0))    
         data0 = torch.from_numpy(inp)
         data1 = data0.view(ind_t,ind_x,ind_y,data0.shape[1])
         Y0 = scale_to_bounds(data1).permute(0,3,1,2)
-        train_x = Y0[:,:5].permute(0,3,2,1).reshape(-1,5)
+        train_x = Y0[:,:3].permute(0,3,2,1).reshape(-1,3)
         test_y = Y0[:,5:].clone().type(torch.int32).permute(0,3,2,1).reshape(-1,num_channels)
         #reshape(446,64,64,3)
         Img = [mask_patches(Y0[:,5+k],mask_ratio=.25)[0] for k in [0,1,2]]
@@ -94,9 +97,11 @@ def data_load(uu,batch_size,split):
         mask = torch.isnan(train_y).reshape(-1,num_channels)
         inducing_points = (train_x[torch.randperm(min(1000 * 100, train_y.size(0)))[0:num_inducing], :])
         inducing_points = inducing_points.clone().data.cpu().numpy()
-        inducing_points = torch.tensor(kmeans2(train_x.data.cpu().numpy(),inducing_points, minit='matrix')[0]).to(torch.float)
+        inducing_points = torch.tensor(kmeans2(train_x.data.cpu().numpy(),inducing_points, minit='matrix')[0]).to(device).to(torch.float)
         train_loader = torch.utils.data.DataLoader(TensorDataset(train_x,train_y), batch_size=batch_size, shuffle=True)
         test_loader = torch.utils.data.DataLoader(TensorDataset(train_x,test_y), batch_size=batch_size, shuffle=False)
+        del data0, data1, data, t0,t1,t2,inp, Y0,Img,train_x,train_y,test_y
+        gc.collect()
     else:          
         data = Dataset(uu)
         x_1, y_1, x_2, y_2 = data.get_split(split)
@@ -109,7 +114,7 @@ def data_load(uu,batch_size,split):
         train_x,test_x = torch.tensor(train_x),torch.tensor(test_x)
         inducing_points = (train_x[torch.randperm(min(1000 * 100, train_y.size(0)))[0:num_inducing], :])
         inducing_points = inducing_points.clone().data.cpu().numpy()
-        inducing_points = torch.tensor(kmeans2(train_x.data.cpu().numpy(),inducing_points, minit='matrix')[0]).to(torch.float)
+        inducing_points = torch.tensor(kmeans2(train_x.data.cpu().numpy(),inducing_points, minit='matrix')[0]).to(device).to(torch.float)
         test_loader = DataLoader(TensorDataset(test_x, test_y), batch_size=batch_size, shuffle=False)
         train_loader = DataLoader(TensorDataset(train_x, train_y), batch_size=batch_size, shuffle=True)
         mask = None
@@ -403,7 +408,7 @@ class MaskedMultitaskGaussianLikelihood(gpytorch.likelihoods.MultitaskGaussianLi
             return res
 
     def log_marginal(self, target, input, mask, Q, Type='DSPP',*params, **kwargs):
-        if Type != 'DSPP':
+        if Type=='GP':
         #if not isinstance(Type, DSPP):
             mask = torch.isnan(target)
             target = target.masked_fill(target.isnan(), -999.)   
@@ -422,7 +427,26 @@ class MaskedMultitaskGaussianLikelihood(gpytorch.likelihoods.MultitaskGaussianLi
             marginal = target.view(-1)[~mask.view(-1)]
             log_marginal = mvn.log_prob(marginal.type(torch.int64))
             return log_marginal
-        else:
+        elif Type=='DGP':
+            mask = torch.isnan(target)
+            target = target.masked_fill(target.isnan(), -999.)  
+            num_tasks = target.shape[-1]        
+            # Mean and covariance of the multitask GP output
+            mean_f = input.mean  # (batch_size, num_tasks)
+            cov_f = input.variance 
+            mask = torch.stack([mask] * len(mean_f))
+            target = torch.stack([target] * len(mean_f))
+            # Likelihood noise covariance
+            noise_covar = self._shaped_noise_covar(mean_f.shape)#.diag()
+            # Full covariance of observed data
+            full_covar = cov_f.view(-1) #+ noise_covar.view(-1)  # (batch_size * num_tasks, batch_size * num_tasks)
+            # Compute log likelihood term
+            mvn = gpytorch.distributions.MultivariateNormal(mean_f.view(-1)[~mask.flatten()], torch.diag(full_covar[~mask.flatten()]))
+            #log_marginal = mvn.log_prob(target.view(-1)[~mask.flatten()])  # Log marginal likelihood 
+            marginal = target.view(-1)[~mask.view(-1)]
+            log_marginal = mvn.log_prob(marginal.type(torch.int64))
+            return log_marginal
+        elif Type=='DSPP':
             target = torch.stack([target] * Q)
             mask = torch.isnan(target)
             target = target.masked_fill(target.isnan(), -999.)   
@@ -432,9 +456,9 @@ class MaskedMultitaskGaussianLikelihood(gpytorch.likelihoods.MultitaskGaussianLi
             mean_f = input.mean  # (batch_size, num_tasks)
             cov_f = input.variance 
             # Likelihood noise covariance
-            noise_covar = self._shaped_noise_covar(mean_f.shape).diag()
+            noise_covar = self._shaped_noise_covar(mean_f.shape)#.diag()
             # Full covariance of observed data
-            full_covar = cov_f.view(-1) + noise_covar.view(-1)  # (batch_size * num_tasks, batch_size * num_tasks)
+            full_covar = cov_f.view(-1) #+ noise_covar.view(-1)  # (batch_size * num_tasks, batch_size * num_tasks)
             # Compute log likelihood term
             mvn = gpytorch.distributions.MultivariateNormal(mean_f.view(-1)[~mask.flatten()], torch.diag(full_covar[~mask.flatten()]))
             #log_marginal = mvn.log_prob(target.view(-1)[~mask.flatten()])  # Log marginal likelihood   
